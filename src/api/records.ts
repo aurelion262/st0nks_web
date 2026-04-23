@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { RecordModel } from '../types';
+import type { RecordModel } from '../types';
 
 // The backend returns upperLimit and lowerLimit as strings because of TypeORM decimal.
 // We need to parse them to numbers.

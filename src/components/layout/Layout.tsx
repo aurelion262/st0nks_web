@@ -22,7 +22,6 @@ export default function Layout() {
 
   const navItems = [
     { name: 'Profiles', path: '/profiles', icon: LayoutDashboard },
-    { name: 'Records', path: '/records', icon: Settings },
   ];
 
   return (
