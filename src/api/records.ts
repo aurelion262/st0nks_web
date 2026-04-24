@@ -1,12 +1,10 @@
 import { apiClient } from './client';
 import type { RecordModel } from '../types';
 
-// The backend returns upperLimit and lowerLimit as strings because of TypeORM decimal.
-// We need to parse them to numbers.
+// The backend now stores targetPrice in thousands.
 const parseRecord = (record: any): RecordModel => ({
   ...record,
-  upperLimit: record.upperLimit !== null && record.upperLimit !== undefined ? Number(record.upperLimit) : null,
-  lowerLimit: record.lowerLimit !== null && record.lowerLimit !== undefined ? Number(record.lowerLimit) : null,
+  targetPrice: record.targetPrice !== null && record.targetPrice !== undefined ? Number(record.targetPrice) : 0,
 });
 
 export const recordsApi = {
@@ -18,7 +16,7 @@ export const recordsApi = {
     const { data } = await apiClient.get<any>(`/records/${id}`);
     return parseRecord(data);
   },
-  create: async (payload: Omit<RecordModel, 'id' | 'lastAlertedAt' | 'profile'>) => {
+  create: async (payload: Omit<RecordModel, 'id' | 'triggeredState' | 'profile'>) => {
     const { data } = await apiClient.post<any>('/records', payload);
     return parseRecord(data);
   },

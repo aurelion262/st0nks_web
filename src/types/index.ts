@@ -13,12 +13,13 @@ export interface Profile {
 export interface RecordModel {
   id: string
   symbol: string
-  upperLimit: number | null
-  lowerLimit: number | null
+  condition: '>=' | '<='
+  targetPrice: number
+  offsets: number[]
   status: RecordStatus
   alertMode: AlertMode
   checkInterval: number
-  lastAlertedAt: string | null
+  triggeredState: any
   profileId: string
   profile?: Profile
 }

@@ -6,12 +6,12 @@ import { quotesApi } from '@/api/quotes';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Pencil, MessagesSquare, BellRing } from 'lucide-react';
+import { Plus, Trash2, Pencil, MessagesSquare, BellRing, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import type { Profile, ProfileStatus, RecordModel, RecordStatus, AlertMode } from '@/types';
+import type { Profile, ProfileStatus, RecordModel } from '@/types';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -30,15 +30,14 @@ export default function ProfilesPage() {
   // Record Dialog State
   const [isRecordDialogOpen, setIsRecordDialogOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<RecordModel | null>(null);
-  const [recordFormData, setRecordFormData] = useState({
-    symbol: '',
-    upperLimit: '',
-    lowerLimit: '',
-    status: 'enabled' as RecordStatus,
-    alertMode: 'one-time' as AlertMode,
-    checkInterval: 1,
-    profileId: ''
-  });
+  const [recordFormData, setRecordFormData] = useState<any>({ symbol: '', condition: '>=', targetPrice: '', offsets: [0], status: 'enabled', alertMode: 'one-time', checkInterval: 1, profileId: '' });
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [collapsedProfiles, setCollapsedProfiles] = useState<Record<string, boolean>>({});
+
+  const toggleCollapse = (id: string) => {
+    setCollapsedProfiles(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   // 1. Fetch Profiles
   const { data: profiles = [], isLoading } = useQuery({
@@ -63,7 +62,7 @@ export default function ProfilesPage() {
 
   const priceMap = useMemo(() => {
     const map: Record<string, number> = {};
-    quotes.forEach(q => { map[q.symbol] = q.close_price; });
+    quotes.forEach(q => { map[q.symbol] = (q.close_price || q.reference_price || 0) / 1000; });
     return map;
   }, [quotes]);
 
@@ -149,8 +148,9 @@ export default function ProfilesPage() {
 
     const payload = {
       symbol: recordFormData.symbol.toUpperCase(),
-      upperLimit: recordFormData.upperLimit ? Number(recordFormData.upperLimit) : null,
-      lowerLimit: recordFormData.lowerLimit ? Number(recordFormData.lowerLimit) : null,
+      condition: recordFormData.condition,
+      targetPrice: Number(recordFormData.targetPrice),
+      offsets: recordFormData.offsets,
       status: recordFormData.status,
       alertMode: recordFormData.alertMode,
       checkInterval: Number(recordFormData.checkInterval),
@@ -179,7 +179,7 @@ export default function ProfilesPage() {
   const openCreateRecord = (profileId: string) => {
     setEditingRecord(null);
     setRecordFormData({ 
-      symbol: '', upperLimit: '', lowerLimit: '', status: 'enabled', 
+      symbol: '', condition: '>=', targetPrice: '', offsets: [0], status: 'enabled', 
       alertMode: 'one-time', checkInterval: 1, profileId 
     });
     setIsRecordDialogOpen(true);
@@ -189,8 +189,9 @@ export default function ProfilesPage() {
     setEditingRecord(record);
     setRecordFormData({
       symbol: record.symbol,
-      upperLimit: record.upperLimit?.toString() || '',
-      lowerLimit: record.lowerLimit?.toString() || '',
+      condition: record.condition,
+      targetPrice: record.targetPrice?.toString() || '',
+      offsets: record.offsets || [0],
       status: record.status,
       alertMode: record.alertMode,
       checkInterval: record.checkInterval,
@@ -211,6 +212,16 @@ export default function ProfilesPage() {
         </Button>
       </div>
 
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input 
+          placeholder="Search profiles by name..." 
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-9 bg-background/50 border-muted-foreground/20"
+        />
+      </div>
+
       {isLoading ? (
         <div className="flex items-center justify-center p-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -226,15 +237,25 @@ export default function ProfilesPage() {
         </Card>
       ) : (
         <div className="flex flex-col gap-8">
-          {profiles.map(profile => (
+          {profiles.filter(p => p.uniqueName.toLowerCase().includes(searchTerm.toLowerCase())).map(profile => {
+            const sortedRecords = [...(profile.records || [])].sort((a, b) => {
+              const sym = a.symbol.localeCompare(b.symbol);
+              if (sym !== 0) return sym;
+              return a.condition.localeCompare(b.condition);
+            });
+            const isCollapsed = collapsedProfiles[profile.id];
+
+            return (
             <Card key={profile.id} className="group overflow-hidden border-border/50 shadow-sm">
               <div className={cn("h-1 w-full", profile.status === 'enabled' ? "bg-green-500" : "bg-muted")} />
               
               {/* Profile Header */}
-              <div className="p-6 bg-card flex items-start justify-between border-b">
-                <div>
-                  <h3 className="font-semibold text-xl flex items-center gap-2">
-                    {profile.uniqueName}
+              <div className="p-6 bg-card flex items-start justify-between border-b cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => toggleCollapse(profile.id)}>
+                <div className="flex items-center gap-3">
+                  {isCollapsed ? <ChevronDown className="h-5 w-5 text-muted-foreground" /> : <ChevronUp className="h-5 w-5 text-muted-foreground" />}
+                  <div>
+                    <h3 className="font-semibold text-xl flex items-center gap-2">
+                      {profile.uniqueName}
                     <Badge variant={profile.status === 'enabled' ? 'success' : 'secondary'} className="text-[10px] uppercase ml-2">
                       {profile.status}
                     </Badge>
@@ -249,8 +270,9 @@ export default function ProfilesPage() {
                       )}
                     </div>
                   </div>
+                  </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                   <Button variant="outline" size="sm" onClick={() => openEditProfile(profile)}>
                     <Pencil className="h-4 w-4 mr-2" /> Edit Profile
                   </Button>
@@ -263,6 +285,7 @@ export default function ProfilesPage() {
               </div>
 
               {/* Records Section */}
+              {!isCollapsed && (
               <div className="p-6 bg-muted/10">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-medium flex items-center gap-2">
@@ -286,41 +309,109 @@ export default function ProfilesPage() {
                           <TableHead>Live Price</TableHead>
                           <TableHead>Boundaries (VND)</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Mode / Interval</TableHead>
+                          <TableHead>Mode</TableHead>
+                          <TableHead>Interval</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {profile.records.map(record => {
+                        {sortedRecords.map(record => {
                           const livePrice = priceMap[record.symbol];
                           return (
                             <TableRow key={record.id}>
                               <TableCell className="font-semibold">{record.symbol}</TableCell>
                               <TableCell>
-                                {livePrice ? (
+                                {livePrice !== undefined ? (
                                   <span className="font-mono text-sm px-2 py-1 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium border border-blue-500/20">
-                                    {livePrice.toLocaleString()} ₫
+                                    {livePrice.toLocaleString()}
                                   </span>
                                 ) : (
                                   <span className="text-xs text-muted-foreground animate-pulse">Fetching...</span>
                                 )}
                               </TableCell>
                               <TableCell>
-                                <div className="flex flex-col gap-0.5 text-xs">
-                                  {record.upperLimit && <span className="text-green-600">≥ {record.upperLimit.toLocaleString()}</span>}
-                                  {record.lowerLimit && <span className="text-red-500">≤ {record.lowerLimit.toLocaleString()}</span>}
-                                  {!record.upperLimit && !record.lowerLimit && <span className="text-muted-foreground italic">None</span>}
+                                <div className="flex flex-col gap-1 text-xs">
+                                  <div className="font-medium text-[13px]">
+                                    {record.condition === '>=' ? '≥' : '≤'} {record.targetPrice.toLocaleString()}
+                                  </div>
+                                  <div className="flex flex-wrap gap-1">
+                                    {[-5, -3, -1, 0, 1, 3, 5].map(off => {
+                                      const isPending = updateRecord.isPending && updateRecord.variables?.id === record.id;
+                                      const isSelected = record.offsets.includes(off);
+                                      return (
+                                        <button
+                                          key={off}
+                                          disabled={isPending}
+                                          onClick={() => {
+                                            const newOffsets = isSelected 
+                                              ? record.offsets.filter((o: number) => o !== off)
+                                              : [...record.offsets, off];
+                                            updateRecord.mutate({ id: record.id, data: { offsets: newOffsets } });
+                                          }}
+                                          className={cn(
+                                            "px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors min-w-[32px] text-center",
+                                            isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground",
+                                            isPending ? "opacity-50 cursor-wait" : "cursor-pointer"
+                                          )}
+                                        >
+                                          {off >= 0 ? `+${off}%` : `${off}%`}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <Badge variant={record.status === 'enabled' ? 'success' : 'secondary'} className="text-[10px] uppercase">
+                                <button
+                                  disabled={updateRecord.isPending && updateRecord.variables?.id === record.id}
+                                  onClick={() => updateRecord.mutate({ id: record.id, data: { status: record.status === 'enabled' ? 'disabled' : 'enabled' } })}
+                                  className={cn(
+                                    "px-2 py-0.5 rounded text-[10px] font-medium uppercase transition-colors",
+                                    record.status === 'enabled' ? "bg-green-500/10 text-green-600 border border-green-500/20" : "bg-muted text-muted-foreground hover:bg-muted/80",
+                                    (updateRecord.isPending && updateRecord.variables?.id === record.id) ? "opacity-50 cursor-wait" : "cursor-pointer"
+                                  )}
+                                >
                                   {record.status}
-                                </Badge>
+                                </button>
                               </TableCell>
                               <TableCell>
-                                <div className="text-xs text-muted-foreground">
-                                  <span className="capitalize">{record.alertMode}</span> • {record.checkInterval}m
-                                </div>
+                                <button
+                                  disabled={updateRecord.isPending && updateRecord.variables?.id === record.id}
+                                  onClick={() => updateRecord.mutate({ id: record.id, data: { alertMode: record.alertMode === 'one-time' ? 'continuous' : 'one-time' } })}
+                                  className={cn(
+                                    "px-2 py-0.5 rounded text-[10px] font-medium uppercase transition-colors",
+                                    record.alertMode === 'continuous' ? "bg-blue-500/10 text-blue-600 border border-blue-500/20" : "bg-muted text-muted-foreground hover:bg-muted/80",
+                                    (updateRecord.isPending && updateRecord.variables?.id === record.id) ? "opacity-50 cursor-wait" : "cursor-pointer"
+                                  )}
+                                >
+                                  {record.alertMode}
+                                </button>
+                              </TableCell>
+                              <TableCell>
+                                {record.alertMode === 'continuous' ? (
+                                  <div className="flex flex-wrap gap-1">
+                                    {[1, 5, 15, 30].map(min => {
+                                      const isPending = updateRecord.isPending && updateRecord.variables?.id === record.id;
+                                      const isSelected = record.checkInterval === min;
+                                      return (
+                                        <button
+                                          key={min}
+                                          disabled={isPending}
+                                          onClick={() => updateRecord.mutate({ id: record.id, data: { checkInterval: min } })}
+                                          className={cn(
+                                            "px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors",
+                                            isSelected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80",
+                                            isPending ? "opacity-50 cursor-wait" : "cursor-pointer"
+                                          )}
+                                        >
+                                          {min}m
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground italic pl-1">N/A</span>
+                                )}
                               </TableCell>
                               <TableCell className="text-right">
                                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditRecord(record)}>
@@ -340,8 +431,10 @@ export default function ProfilesPage() {
                   </div>
                 )}
               </div>
+              )}
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -388,13 +481,36 @@ export default function ProfilesPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Upper Limit (≥)</Label>
-                <Input type="number" placeholder="Optional" value={recordFormData.upperLimit} onChange={e => setRecordFormData({...recordFormData, upperLimit: e.target.value})}/>
+                <Label>Condition</Label>
+                <div className="flex bg-muted p-1 rounded-md">
+                  <button type="button" className={cn("flex-1 text-sm py-1 rounded-sm", recordFormData.condition === '>=' ? "bg-background shadow-sm font-medium" : "text-muted-foreground")} onClick={() => setRecordFormData({...recordFormData, condition: '>='})}>≥</button>
+                  <button type="button" className={cn("flex-1 text-sm py-1 rounded-sm", recordFormData.condition === '<=' ? "bg-background shadow-sm font-medium" : "text-muted-foreground")} onClick={() => setRecordFormData({...recordFormData, condition: '<='})}>≤</button>
+                </div>
               </div>
               <div className="space-y-2">
-                <Label>Lower Limit (≤)</Label>
-                <Input type="number" placeholder="Optional" value={recordFormData.lowerLimit} onChange={e => setRecordFormData({...recordFormData, lowerLimit: e.target.value})}/>
+                <Label>Target Price</Label>
+                <Input type="number" step="0.01" placeholder="e.g. 25.5" value={recordFormData.targetPrice} onChange={e => setRecordFormData({...recordFormData, targetPrice: e.target.value})} required/>
               </div>
+            </div>
+            <div className="space-y-2">
+               <Label>Offsets (%)</Label>
+               <div className="flex gap-2 flex-wrap">
+                 {[-5, -3, -1, 0, 1, 3, 5].map(off => (
+                   <button
+                     key={off}
+                     type="button"
+                     onClick={() => {
+                       const newOffsets = recordFormData.offsets.includes(off)
+                         ? recordFormData.offsets.filter((o: number) => o !== off)
+                         : [...recordFormData.offsets, off];
+                       setRecordFormData({...recordFormData, offsets: newOffsets});
+                     }}
+                     className={cn("px-2 py-1 text-sm rounded border font-medium transition-colors", recordFormData.offsets.includes(off) ? "bg-primary text-primary-foreground border-primary" : "bg-background border-input text-muted-foreground hover:bg-muted")}
+                   >
+                     {off >= 0 ? `+${off}%` : `${off}%`}
+                   </button>
+                 ))}
+               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
                <div className="space-y-2">
@@ -412,10 +528,12 @@ export default function ProfilesPage() {
                 </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Interval (minutes)</Label>
-              <Input type="number" min="1" value={recordFormData.checkInterval} onChange={e => setRecordFormData({...recordFormData, checkInterval: Number(e.target.value)})} required/>
-            </div>
+            {recordFormData.alertMode === 'continuous' && (
+              <div className="space-y-2">
+                <Label>Interval (minutes)</Label>
+                <Input type="number" min="1" value={recordFormData.checkInterval} onChange={e => setRecordFormData({...recordFormData, checkInterval: Number(e.target.value)})} required/>
+              </div>
+            )}
             <DialogFooter>
               <Button type="submit" disabled={createRecord.isPending || updateRecord.isPending}>{editingRecord ? 'Update' : 'Create'}</Button>
             </DialogFooter>
