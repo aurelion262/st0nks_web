@@ -27,4 +27,8 @@ export const recordsApi = {
   delete: async (id: string) => {
     await apiClient.delete(`/records/${id}`);
   },
+  bulkUpdateByProfile: async (profileId: string, payload: Partial<RecordModel> & { toggleOffset?: number }) => {
+    const { data } = await apiClient.patch<any[]>(`/records/profile/${profileId}/bulk`, payload);
+    return data.map(parseRecord);
+  },
 };

@@ -126,6 +126,15 @@ export default function ProfilesPage() {
     onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to delete alert')
   });
 
+  const bulkUpdateRecords = useMutation({
+    mutationFn: ({ profileId, data }: { profileId: string, data: Partial<RecordModel> & { toggleOffset?: number } }) => recordsApi.bulkUpdateByProfile(profileId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      toast.success('All records updated successfully');
+    },
+    onError: (error: any) => toast.error(error?.response?.data?.message || 'Failed to update records')
+  });
+
   // --- Handlers ---
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -287,13 +296,55 @@ export default function ProfilesPage() {
               {/* Records Section */}
               {!isCollapsed && (
               <div className="p-6 bg-muted/10">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="font-medium flex items-center gap-2">
+                <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between mb-4 gap-4">
+                  <h4 className="font-medium flex items-center gap-2 shrink-0">
                     <BellRing className="h-4 w-4 text-primary" /> Active Alerts
                   </h4>
-                  <Button size="sm" variant="secondary" onClick={() => openCreateRecord(profile.id)}>
-                    <Plus className="mr-1 h-3.5 w-3.5" /> Add Alert
-                  </Button>
+                  
+                  <div className="flex flex-wrap items-center gap-2 text-xs w-full xl:w-auto">
+                    <div className="flex bg-muted/80 p-0.5 rounded border border-border/50 items-center shadow-sm">
+                      <span className="text-muted-foreground/70 px-2 font-medium text-[10px] uppercase">Set All</span>
+                      <button disabled={bulkUpdateRecords.isPending} onClick={() => bulkUpdateRecords.mutate({ profileId: profile.id, data: { status: 'enabled' } })} className="px-2 py-1 rounded-sm hover:bg-background hover:text-green-600 transition-all font-medium">ON</button>
+                      <button disabled={bulkUpdateRecords.isPending} onClick={() => bulkUpdateRecords.mutate({ profileId: profile.id, data: { status: 'disabled' } })} className="px-2 py-1 rounded-sm hover:bg-background hover:text-destructive transition-all font-medium">OFF</button>
+                    </div>
+
+                    <div className="flex bg-muted/80 p-0.5 rounded border border-border/50 items-center shadow-sm">
+                      <span className="text-muted-foreground/70 px-2 font-medium text-[10px] uppercase">Mode</span>
+                      <button disabled={bulkUpdateRecords.isPending} onClick={() => bulkUpdateRecords.mutate({ profileId: profile.id, data: { alertMode: 'one-time' } })} className="px-2 py-1 rounded-sm hover:bg-background transition-all font-medium">1-Time</button>
+                      <button disabled={bulkUpdateRecords.isPending} onClick={() => bulkUpdateRecords.mutate({ profileId: profile.id, data: { alertMode: 'continuous' } })} className="px-2 py-1 rounded-sm hover:bg-background text-blue-600 transition-all font-medium">Cont.</button>
+                    </div>
+
+                    <div className="flex bg-muted/80 p-0.5 rounded border border-border/50 items-center shadow-sm">
+                      <span className="text-muted-foreground/70 px-2 font-medium text-[10px] uppercase">Interval</span>
+                      {[1, 5, 15, 30].map(m => (
+                        <button key={m} disabled={bulkUpdateRecords.isPending} onClick={() => bulkUpdateRecords.mutate({ profileId: profile.id, data: { checkInterval: m, alertMode: 'continuous' } })} className="px-1.5 py-1 rounded-sm hover:bg-background transition-all font-medium">{m}m</button>
+                      ))}
+                    </div>
+
+                    <div className="flex bg-muted/80 p-0.5 rounded border border-border/50 items-center shadow-sm">
+                      <span className="text-muted-foreground/70 px-2 font-medium text-[10px] uppercase">Offsets</span>
+                      {[-5, -3, -1, 0, 1, 3, 5].map(off => {
+                        const allHaveIt = profile.records && profile.records.length > 0 && profile.records.every(r => r.offsets && r.offsets.includes(off));
+                        return (
+                          <button 
+                            key={off} 
+                            disabled={bulkUpdateRecords.isPending} 
+                            onClick={() => bulkUpdateRecords.mutate({ profileId: profile.id, data: { toggleOffset: off } })} 
+                            className={cn(
+                              "px-1.5 py-1 rounded-sm transition-all font-medium",
+                              allHaveIt ? "bg-primary text-primary-foreground" : "hover:bg-background"
+                            )}
+                          >
+                            {off >= 0 ? `+${off}%` : `${off}%`}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <Button size="sm" variant="secondary" onClick={() => openCreateRecord(profile.id)} className="ml-auto shadow-sm">
+                      <Plus className="mr-1 h-3.5 w-3.5" /> Add Alert
+                    </Button>
+                  </div>
                 </div>
                 
                 {(!profile.records || profile.records.length === 0) ? (
