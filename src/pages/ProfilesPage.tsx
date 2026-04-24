@@ -278,7 +278,7 @@ export default function ProfilesPage() {
                     <p className="text-sm text-muted-foreground">No alerts set for this profile yet.</p>
                   </div>
                 ) : (
-                  <div className="border rounded-lg bg-background overflow-hidden">
+                  <div className="border rounded-lg bg-background overflow-x-auto">
                     <Table>
                       <TableHeader className="bg-muted/30">
                         <TableRow>
